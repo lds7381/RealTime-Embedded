@@ -1,0 +1,7 @@
+../Core/Src/ADC.c:12:6:get_frequency	40	static
+../Core/Src/ADC.c:59:6:get_signal_type	64	static
+../Core/Src/ADC.c:112:6:get_min_max	32	static
+../Core/Src/ADC.c:122:6:get_buckets	40	static
+../Core/Src/ADC.c:140:6:get_user_input	80	static
+../Core/Src/ADC.c:168:6:print_captured_info	72	static
+../Core/Src/ADC.c:199:6:ADC_capture	64	static

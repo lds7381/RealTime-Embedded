@@ -1,0 +1,2 @@
+../Core/Src/random.c:11:7:get_rand_num	24	static
+../Core/Src/random.c:16:10:convert_ticks_ms	16	static

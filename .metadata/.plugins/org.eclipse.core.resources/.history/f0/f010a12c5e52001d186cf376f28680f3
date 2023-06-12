@@ -1,0 +1,305 @@
+/*
+ * queue.c
+ *
+ *	Class will have the task that will create new customers and add them into the queue.
+ *
+ *  Created on: Oct 12, 2022
+ *      Author: liams
+ */
+
+#include <manager.h>
+
+static uint32_t bank_open_time;
+static uint32_t bank_close_time;
+
+static teller_status_t force_stat;
+
+static uint8_t max_queue;
+int *idle_hook_cnt_pnt;
+uint8_t last_seg_display = 0;
+
+/* Customer Queue Task
+ * - Customers will be gernated in this task every 1-4 "minutes"
+ * - Waits for semaphore from one of the teller tasks showing that it has finished with a customer
+ */
+void manager_task(void *manager_info) {
+	uint32_t last_queue_time = 0;
+	uint32_t rand_queue_time = 0;
+	customer_t generated;
+
+	struct manager_info_t *manager = (struct manager_info_t *)manager_info;
+	// Get the queue handle
+	osMessageQueueId_t *handle = manager->queue_handle;
+	// get the idle hook pointer
+	idle_hook_cnt_pnt = manager->idle_hook_cnt;
+
+	// clear 7 segment display
+	clear_seg7();
+
+	// Get the start time of the bank opening
+	bank_open_time = TIM2->CNT;
+	// Get the close time of the bank
+	bank_close_time = bank_open_time + SEVEN_HOURS;
+
+	// Bank Open
+	USART_Write(USART2, "---- BANK OPEN ----\r\n", 22);
+
+	// Start the main loop of the task
+	while(bank_close_time > TIM2->CNT) {
+		// display current teller and manager information over UART
+		monitor(handle, manager->teller01, manager->teller02, manager->teller03);
+		// update 7-segment display
+		update_seg7(handle);
+		// Handles breaks for the tellers
+		check_breaks(manager->teller01, manager->teller02, manager->teller03);
+		// Check to see if it is time to add a new customer to the queue
+		if (TIM2->CNT > (last_queue_time + rand_queue_time)) {
+			// Generate a customer
+			generated = generate_customer();
+			// Add to queue
+			osMessageQueuePut(*handle, &generated, 0, osWaitForever);
+			// Set the last queue time;
+			last_queue_time = TIM2->CNT;
+			// Set the random time to add another customer to queue
+			rand_queue_time = (uint32_t)get_rand_num(RNG->DR, MIN_CUST_TIME, MAX_CUST_TIME);
+		}
+	}
+
+	// Set end of shifts for the tellers
+	manager->teller01->end_of_shift = 1;
+	manager->teller02->end_of_shift = 1;
+	manager->teller02->end_of_shift = 1;
+
+	// Aquire all semaphores
+	osSemaphoreAcquire(*(manager->teller01->sem), 0);
+	osSemaphoreAcquire(*(manager->teller02->sem), 0);
+	osSemaphoreAcquire(*(manager->teller03->sem), 0);
+	USART_Write(USART2, "\r\n---- BANK CLOSED ----\r\n", 26);
+	clear_seg7();
+	print_results(manager->teller01, manager->teller02, manager->teller03);
+
+}
+
+// Check Tellers Breaks function
+// Will put tellers onto breaks at random intervals after they are done with customer
+void check_breaks (teller_t *t1, teller_t *t2, teller_t *t3) {
+	// Check force break
+	//check_force_break(t1);
+	check_force_break(t2);
+	//check_force_break(t3);
+	// Check normal break
+	if (t1->next_break_time == 0) {t1->next_break_time = get_rand_num(RNG->DR, MIN_NEXT_BREAK_TIME, MAX_NEXT_BREAK_TIME) + TIM2->CNT;}
+	if (t2->next_break_time == 0) {t2->next_break_time = get_rand_num(RNG->DR, MIN_NEXT_BREAK_TIME, MAX_NEXT_BREAK_TIME) + TIM2->CNT;}
+	if (t3->next_break_time == 0) {t3->next_break_time = get_rand_num(RNG->DR, MIN_NEXT_BREAK_TIME, MAX_NEXT_BREAK_TIME) + TIM2->CNT;}
+
+	if (t1->next_break_time <= TIM2->CNT) { t1->break_flag = 1;}
+	if (t2->next_break_time <= TIM2->CNT) { t2->break_flag = 1;}
+	if (t3->next_break_time <= TIM2->CNT) { t3->break_flag = 1;}
+}
+
+void check_force_break(teller_t *t) {
+
+
+	// Not on a force break
+	if (t->force_break_flag == 0) {
+		if (HAL_GPIO_ReadPin(t->GPIO_port, t->button_pin)==GPIO_PIN_RESET) {
+			t->force_break_flag = 1;
+		}
+	}
+	// on a force break
+	else {
+		if (HAL_GPIO_ReadPin(t->GPIO_port, t->button_pin)==GPIO_PIN_SET) {
+			t->force_break_flag = 0;
+		}
+	}
+}
+
+void update_seg7(osMessageQueueId_t *q) {
+	uint32_t queue_size = osMessageQueueGetCount(*q);
+	uint8_t seg_display;
+
+	seg_display = get_display_from_size(queue_size);
+
+	HAL_GPIO_WritePin(SHLD_D4_SEG7_Latch_GPIO_Port, SHLD_D4_SEG7_Latch_Pin, GPIO_PIN_RESET);
+	shiftOut(SHLD_D8_SEG7_Data_GPIO_Port, SHLD_D8_SEG7_Data_Pin, SHLD_D7_SEG7_Clock_GPIO_Port, SHLD_D7_SEG7_Clock_Pin, seg_display);
+	//shiftOut(SHLD_D8_SEG7_Data_GPIO_Port, SHLD_D8_SEG7_Data_Pin, SHLD_D7_SEG7_Clock_GPIO_Port, SHLD_D7_SEG7_Clock_Pin, SEVEN_SEG_ONE);
+	HAL_GPIO_WritePin(SHLD_D4_SEG7_Latch_GPIO_Port, SHLD_D4_SEG7_Latch_Pin, GPIO_PIN_SET);	// latch data
+	last_seg_display = queue_size;
+}
+
+
+uint8_t get_display_from_size(uint32_t size) {
+	switch(size) {
+		case 0:
+			return SEVEN_SEG_ZERO;
+		case 1:
+			return SEVEN_SEG_ONE;
+		case 2:
+			return SEVEN_SEG_TWO;
+		case 3:
+			return SEVEN_SEG_THREE;
+		case 4:
+			return SEVEN_SEG_FOUR;
+		case 5:
+			return SEVEN_SEG_FIVE;
+		default:
+			return 0;
+	}
+}
+
+void clear_seg7() {
+	// Clears the 7 Seg Display
+	HAL_GPIO_WritePin(SHLD_D4_SEG7_Latch_GPIO_Port, SHLD_D4_SEG7_Latch_Pin, GPIO_PIN_RESET);
+	shiftOut(SHLD_D8_SEG7_Data_GPIO_Port, SHLD_D8_SEG7_Data_Pin, SHLD_D7_SEG7_Clock_GPIO_Port, SHLD_D7_SEG7_Clock_Pin, 0);
+	shiftOut(SHLD_D8_SEG7_Data_GPIO_Port, SHLD_D8_SEG7_Data_Pin, SHLD_D7_SEG7_Clock_GPIO_Port, SHLD_D7_SEG7_Clock_Pin, 0);
+	HAL_GPIO_WritePin(SHLD_D4_SEG7_Latch_GPIO_Port, SHLD_D4_SEG7_Latch_Pin, GPIO_PIN_SET);	// latch data
+}
+
+void shiftOut(GPIO_TypeDef* data_port, uint16_t data_pin, GPIO_TypeDef* clock_port, uint16_t clock_pin, uint8_t value) {
+	for(int ii=0x40; ii; ii>>=1) {
+		HAL_GPIO_WritePin(clock_port, clock_pin, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(data_port, data_pin, (value&ii)!=0);
+		HAL_GPIO_WritePin(clock_port, clock_pin, GPIO_PIN_SET);
+	}
+}
+
+void print_results(teller_t *t1, teller_t *t2, teller_t *t3) {
+	char str[100];
+	int str_size;
+	uint32_t max_queue_wait;
+	uint32_t max_wait_for_customer;
+	uint32_t max_customer_help_time;
+	uint32_t max_break_time;
+	uint32_t min_break_time;
+	uint32_t avg_break_time;
+
+	// Customers Served
+	int total_cust_served = t1->customers_helped + t2->customers_helped + t3->customers_helped;
+	sprintf(str, "Total Customers Served: %d\r\n", total_cust_served);
+	USART_Write(USART2, (uint8_t *)str, 29);
+
+
+	// How many each teller served
+	sprintf(str, (uint8_t *)"\t Teller 1: %d\r\n\t Teller 2: %d\r\n\t Teller 3: %d\r\n", t1->customers_helped, t2->customers_helped, t3->customers_helped);
+	USART_Write(USART2, (uint8_t *)str, 48);
+
+	// Average time spent in queue
+	uint32_t avg_time_in_queue = (t1->total_customer_queue_wait + t2->total_customer_queue_wait + t1->total_customer_queue_wait) / total_cust_served;
+	str_size = sprintf(str, (uint8_t *)"Average time spent in queue: %d s\r\n", convert_ticks_seconds(avg_time_in_queue));
+	USART_Write(USART2, (uint8_t *)str, str_size);
+
+	// Average time with teller
+	uint32_t avg_time_w_teller = (t1->avg_customer_help_time + t2->avg_customer_help_time + t3->avg_customer_help_time) / 3;
+	sprintf(str, "Average Time at Teller: %d s\r\n", convert_ticks_seconds(avg_time_w_teller));
+	USART_Write(USART2, (uint8_t *)str, 32);
+
+
+	// Average teller wait
+	uint32_t avg_teller_wait = (t1->avg_teller_wait_for_customer + t2->avg_teller_wait_for_customer + t3->avg_teller_wait_for_customer) / 3;
+	sprintf(str, (uint8_t *)"Average Teller wait for Customer: %d s\r\n", convert_ticks_seconds(avg_teller_wait));
+	USART_Write(USART2, (uint8_t *)str, 42);
+
+
+	// Max Wait in queue
+	if (t1->max_cust_queue_wait > t2->max_cust_queue_wait && t1->max_cust_queue_wait > t2->max_cust_queue_wait) {
+		max_queue_wait = t1->max_cust_queue_wait;
+	}
+	else if (t2->max_cust_queue_wait > t1->max_cust_queue_wait && t2->max_cust_queue_wait > t3->max_cust_queue_wait) {
+		max_queue_wait = t2->max_cust_queue_wait;
+	}
+	else if (t3->max_cust_queue_wait > t1->max_cust_queue_wait && t3->max_cust_queue_wait > t2->max_cust_queue_wait) {
+		max_queue_wait = t3->max_cust_queue_wait;
+	}
+	sprintf(str, "Longest Queue Wait: %d s\r\n", convert_ticks_seconds(max_queue_wait));
+	USART_Write(USART2, str, 27);
+
+
+	// Max Wait time for tellers
+	if (t1->max_wait_for_customer > t2->max_wait_for_customer && t1->max_wait_for_customer > t2->max_wait_for_customer) {
+		max_wait_for_customer = t1->max_wait_for_customer;
+	}
+	else if (t2->max_wait_for_customer > t1->max_wait_for_customer && t2->max_wait_for_customer > t3->max_wait_for_customer) {
+		max_wait_for_customer = t2->max_wait_for_customer;
+	}
+	else if (t3->max_wait_for_customer > t1->max_wait_for_customer && t3->max_wait_for_customer > t2->max_wait_for_customer) {
+		max_wait_for_customer = t3->max_wait_for_customer;
+	}
+	sprintf(str, "Longest Wait for Customer: %d s\r\n", convert_ticks_seconds(max_wait_for_customer));
+	USART_Write(USART2, str, 35);
+
+
+	// Max transaction time (across all tellers)
+	if (t1->max_customer_help_time > t2->max_customer_help_time && t1->max_customer_help_time > t2->max_customer_help_time) {
+		max_customer_help_time = t1->max_customer_help_time;
+	}
+	else if (t2->max_customer_help_time > t1->max_customer_help_time && t2->max_customer_help_time > t3->max_customer_help_time) {
+		max_customer_help_time = t2->max_customer_help_time;
+	}
+	else if (t3->max_customer_help_time > t1->max_customer_help_time && t3->max_customer_help_time > t2->max_customer_help_time) {
+		max_customer_help_time = t3->max_customer_help_time;
+	}
+	sprintf(str, "Max Transaction Time: %d s\r\n", convert_ticks_seconds(max_customer_help_time));
+	USART_Write(USART2, str, 30);
+
+	// Maximum queue depth
+	sprintf(str, "Max Queue Length: %d \r\n", max_queue);
+	USART_Write(USART2, str, 22);
+
+	// Idle hook count
+	str_size = sprintf(str, "Idle Hook Count: %d \r\n", *idle_hook_cnt_pnt);
+	USART_Write(USART2, str, str_size);
+
+	// Number of breaks
+	str_size = sprintf(str, (uint8_t *)"Total Number of breaks: %d\r\n", (t1->breaks_cnt + t2->breaks_cnt + t3->breaks_cnt));
+	USART_Write(USART2, (uint8_t*)str, str_size);
+
+	// Breaks per teller
+	str_size = sprintf(str, (uint8_t *)"\t Teller 1: %d\r\n\t Teller 2: %d\r\n\t Teller 3: %d\r\n", t1->breaks_cnt, t2->breaks_cnt, t3->breaks_cnt);
+	USART_Write(USART2, (uint8_t *)str, str_size);
+
+	// Longest break
+	if (t1->longest_break_time > t2->longest_break_time && t1->longest_break_time > t2->longest_break_time) {
+		max_break_time = t1->longest_break_time;
+	}
+	else if (t2->longest_break_time > t1->longest_break_time && t2->longest_break_time > t3->longest_break_time) {
+		max_break_time = t2->longest_break_time;
+	}
+	else if (t3->longest_break_time > t1->longest_break_time && t3->longest_break_time > t2->longest_break_time) {
+		max_break_time = t3->longest_break_time;
+	}
+	str_size = sprintf(str, (uint8_t *)"Longest Break Time: %d s\r\n", convert_ticks_seconds(max_break_time));
+	USART_Write(USART2, (uint8_t *)str, str_size);
+
+	// Shortest break
+	if (t1->shortest_break_time < t2->shortest_break_time && t1->shortest_break_time < t2->shortest_break_time) {
+		min_break_time = t1->longest_break_time;
+	}
+	else if (t2->shortest_break_time < t1->shortest_break_time && t2->shortest_break_time < t3->shortest_break_time) {
+		min_break_time = t2->shortest_break_time;
+	}
+	else if (t3->shortest_break_time < t1->shortest_break_time && t3->shortest_break_time < t2->shortest_break_time) {
+		min_break_time = t3->shortest_break_time;
+	}
+	str_size = sprintf(str, (uint8_t *)"Shortest Break Time: %d s\r\n", convert_ticks_seconds(min_break_time));
+	USART_Write(USART2, (uint8_t *)str, str_size);
+
+	// Average break
+	avg_break_time = (t1->total_break_time + t2->total_break_time + t3->total_break_time) / (t1->breaks_cnt + t2->breaks_cnt + t3->breaks_cnt);
+	str_size = sprintf(str, (uint8_t *)"Average Break Time: %d s\r\n", convert_ticks_seconds(avg_break_time));
+	USART_Write(USART2, (uint8_t *)str, str_size);
+
+}
+
+void monitor(osMessageQueueId_t *q, teller_t *t1, teller_t *t2, teller_t *t3) {
+	char str[100];
+
+	int time = (TIM2->CNT - bank_open_time) / ONE_MINUTE_TICKS;
+	uint32_t queue_size = osMessageQueueGetCount(*q);
+	if (queue_size > max_queue) max_queue = queue_size;
+
+	sprintf(str, "\rTime: %d, Queue: %d, Teller 1: %d, Teller 2: %d, Teller 3: %d            ", time, queue_size, t1->status, t2->status, t3->status);
+	USART_Write(USART2, str, 70);
+
+}
+
+

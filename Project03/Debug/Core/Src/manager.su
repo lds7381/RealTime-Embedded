@@ -1,0 +1,9 @@
+../Core/Src/manager.c:25:6:manager_task	88	static
+../Core/Src/manager.c:85:6:check_breaks	24	static
+../Core/Src/manager.c:100:6:check_force_break	16	static
+../Core/Src/manager.c:117:6:update_seg7	32	static
+../Core/Src/manager.c:130:9:get_display_from_size	16	static
+../Core/Src/manager.c:149:6:clear_seg7	16	static
+../Core/Src/manager.c:157:6:shiftOut	32	static
+../Core/Src/manager.c:165:6:print_results	176	static
+../Core/Src/manager.c:292:6:monitor	168	static

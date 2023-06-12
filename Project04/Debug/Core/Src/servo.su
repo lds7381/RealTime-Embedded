@@ -1,0 +1,5 @@
+../Core/Src/servo.c:10:6:lead_servo_task	32	static
+../Core/Src/servo.c:56:6:user_servo_task	32	static
+../Core/Src/servo.c:96:6:calibrate_servo	256	static
+../Core/Src/servo.c:155:10:get_duty_cycle_from_position	16	static
+../Core/Src/servo.c:174:10:get_move_wait	24	static

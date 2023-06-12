@@ -1,0 +1,662 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : Main program body
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2022 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include "utils.h"
+#include <stdio.h>
+#include <stdlib.h>
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim4;
+
+UART_HandleTypeDef huart2;
+
+/* USER CODE BEGIN PV */
+
+static char read_char;
+static servo_commands_t commands[] = {none, none};
+
+static char *prompt = "Welcome to Servo Recipes \r\n"
+		 	 	 	  "Enter servo commands, servo 1 first, then servo 2 and press enter. \r\n"
+		 	 	 	  "Commands: B: Begin Recipe, P: Pause Recipe, C: Continue Recipe, R: Servo Right, L: Servo Left, N: No Op\r\n";
+
+static servo_profile_t servo_one;
+static servo_profile_t servo_two;
+
+unsigned char recipe1[] = {MOV + 5, MOV | 3, SWEEP | 3, LOOP | 3, MOV | 3, MOV | 5, END_LOOP, RECIPE_END};
+unsigned char recipe2[] = {MOV + 5, MOV | 0, LOOP | 3, MOV | 3, MOV | 5, END_LOOP, RECIPE_END};
+unsigned char recipe_demo[] = { MOV + 0, MOV + 5, MOV + 0,
+							  MOV + 3, LOOP + 0, MOV + 1,
+							  MOV + 4, END_LOOP, MOV + 0,
+							  MOV + 2, WAIT + 0, MOV + 3,
+							  WAIT + 31, WAIT + 31, WAIT + 31,
+                              MOV + 4, SWEEP + 5 };
+
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_USART2_UART_Init(void);
+static void MX_TIM2_Init(void);
+static void MX_TIM3_Init(void);
+static void MX_TIM4_Init(void);
+/* USER CODE BEGIN PFP */
+
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+
+void setup() {
+	// Set servo to position 0
+    TIM2->CCR1 = POSITION_0;
+    TIM3->CCR1 = POSITION_0;
+    // Set the recipes to the servos
+    servo_one.recipe = recipe_demo;
+    servo_two.recipe = recipe2;
+    // Set up servo profiles
+    servo_one.command = none;
+    servo_two.command = none;
+    servo_one.position = 0;
+    servo_two.position = 0;
+    servo_one.recipe_index = 0;
+    servo_two.recipe_index = 0;
+    servo_one.status = status_paused;
+    servo_two.status = status_paused;
+    servo_one.wait_cnt = 0;
+    servo_two.wait_cnt = 0;
+    servo_one.loop_cnt = 0;
+    servo_two.loop_cnt = 0;
+    servo_one.move_wait = 0;
+    servo_two.move_wait = 0;
+    servo_one.sweep_cnt = 0;
+    servo_two.sweep_cnt = 0;
+    servo_one.nest_prot = 0;
+    servo_two.nest_prot = 0;
+
+    // Ask initial prompt
+    USART_Write(USART2, prompt, 202);
+}
+
+void update_leds(enum status status){
+	switch (status) {
+		case status_running:
+			set_led(1, GPIOA, LED01_Pin);			// D1: on
+			set_led(0, LED02_GPIO_Port, LED02_Pin);	// D2: off
+			break;
+		case status_paused:
+			set_led(0, GPIOA, LED01_Pin);			// D1: off
+			set_led(0, LED02_GPIO_Port, LED02_Pin);	// D2: off
+			break;
+		case status_command_error:
+			set_led(0, GPIOA, LED01_Pin);			// D1: off
+			set_led(1, LED02_GPIO_Port, LED02_Pin);	// D2: on
+			break;
+		case status_nested_error:
+			set_led(1, GPIOA, LED01_Pin);			// D1: on
+			set_led(1, LED02_GPIO_Port, LED02_Pin);	// D2: on
+			break;
+		default:
+			break;
+	}
+}
+
+
+void update_servo(struct servo_profile_t *profile, TIM_TypeDef *TIMx){
+	int diff;
+
+	switch (profile->command) {
+		case servo_begin:
+			// Get the current time if this starting/resuming
+			if (profile->status == status_paused) {
+				profile->comp_time = TIMx->CNT;
+				profile->status = status_running;
+			}
+			// perform recipe
+			else {
+				diff = ((TIM4->CNT) - profile->comp_time);
+				// if it has been 100ms perform next recipe item
+				if (diff >= ( TIME_100MS + profile->move_wait)){
+					// reset the move wait
+					profile->move_wait = 0;
+					// perform next recipe item
+					perform_recipe(profile, TIMx);
+					// Set the new comparison time
+					profile->comp_time = TIM4->CNT;
+				}
+			}
+			break;
+		case servo_pause:
+			if (profile->status == status_running) {
+				profile->status = status_paused;
+			}
+			break;
+		case servo_right:
+			if ((profile->status == status_paused || profile->command == none) && profile->position > 0) {
+				profile->position -= 1;
+				TIMx->CCR1 = get_duty_cycle_from_position(profile->position);
+			}
+			profile->command = none;
+			break;
+		case servo_left:
+			if ((profile->status == status_paused || profile->command == none) && profile->position < 5) {
+				profile->position += 1;
+				TIMx->CCR1 = get_duty_cycle_from_position(profile->position);
+			}
+			profile->command = none;
+			break;
+		case servo_no_op:
+			profile->command = none;
+			break;
+		default:
+			break;
+	}
+
+}
+
+void perform_recipe(struct servo_profile_t *profile, TIM_TypeDef *TIMx) {
+	uint8_t curr_item      = profile->recipe[profile->recipe_index];
+	uint8_t op_mask 	   = 0b11100000;
+	uint8_t parameter_mask = 0b00011111;
+	uint8_t opcode;
+	uint8_t parameter;
+
+	// Get the opcode
+	opcode = (curr_item & op_mask) >> 5;
+	parameter = (curr_item & parameter_mask);
+	switch(opcode) {
+		case (MOV >> OPCODE_SHIFT):
+			profile->move_wait = get_move_wait(profile->position, parameter);
+			profile->position = parameter;
+			TIMx->CCR1 = get_duty_cycle_from_position(parameter);
+			profile->recipe_index++;
+			break;
+		case (WAIT >> OPCODE_SHIFT):
+			if (profile->wait_cnt < parameter) {
+				profile->wait_cnt++;
+			}
+			else {
+				profile->recipe_index++;
+			}
+			break;
+		case (LOOP >> OPCODE_SHIFT):
+			profile->nest_prot++;
+			// Save the start of the loop
+			profile->loop_start_index = profile->recipe_index + 1;
+			// Save the amount of loops needed to be
+			profile->loop_amt = parameter;
+			profile->recipe_index++;
+			if (profile->nest_prot > 1) {
+				profile->status = status_nested_error;
+				profile->command = servo_paused;
+			}
+			break;
+		case (END_LOOP >> OPCODE_SHIFT):
+			profile->loop_cnt++;
+			if (profile->loop_cnt > profile->loop_amt) {
+				profile->recipe_index++;
+			}
+			else {
+				profile->recipe_index = profile->loop_start_index;
+			}
+			break;
+		case (SWEEP >> OPCODE_SHIFT):
+			if ((profile->sweep_cnt / 2) <= parameter) {
+				if (profile->sweep_cnt == 0 || (profile->sweep_cnt % 2) != 0) {
+					profile->move_wait = get_move_wait(profile->position, 0);
+					profile->position = 0;
+					TIMx->CCR1 = get_duty_cycle_from_position(0);
+					profile->sweep_cnt++;
+				}
+				else if ((profile->sweep_cnt % 2) == 0) {
+					profile->move_wait = get_move_wait(profile->position, 5);
+					profile->position = 5;
+					TIMx->CCR1 = get_duty_cycle_from_position(5);
+					profile->sweep_cnt++;
+				}
+			}
+			else {
+				profile->recipe_index++;
+			}
+			break;
+		case RECIPE_END:
+			profile->status = servo_pause;
+			profile->command = none;
+			profile->recipe_index = 0;
+			break;
+		default:
+			profile->status = status_command_error;
+			break;
+	}
+
+}
+
+/* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+  /* USER CODE BEGIN 1 */
+
+  /* USER CODE END 1 */
+
+  /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  /* Configure the system clock */
+  SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+
+  /* USER CODE END SysInit */
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_USART2_UART_Init();
+  MX_TIM2_Init();
+  MX_TIM3_Init();
+  MX_TIM4_Init();
+  /* USER CODE BEGIN 2 */
+  setup();
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+	// *** THIS LOOP CANNOT BE BLOCKING
+	// Check user input
+	if (get_servo_process(commands, USART2)) {
+		// Update servo's commands
+		servo_one.command = commands[0];
+		servo_two.command = commands[1];
+		// remove the commands
+		commands[0] = none;
+		commands[1] = none;
+	}
+	// Run servo process if active
+	update_servo(&servo_one, TIM2);
+	update_servo(&servo_two, TIM3);
+	// update LEDs (only with respects to servo one)
+	update_leds(servo_one.status);
+
+  }
+  /* USER CODE END 3 */
+}
+
+/**
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  /** Configure the main internal regulator output voltage
+  */
+  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 1;
+  RCC_OscInitStruct.PLL.PLLN = 10;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
+  RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
+  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 79;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 19999;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+  HAL_TIM_Base_Start(&htim2);
+  HAL_TIM_IC_Start(&htim2, TIM_CHANNEL_1);
+  /* USER CODE END TIM2_Init 2 */
+  HAL_TIM_MspPostInit(&htim2);
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 79;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 19999;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+  HAL_TIM_Base_Start(&htim3);
+  HAL_TIM_IC_Start(&htim3, TIM_CHANNEL_1);
+  /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
+
+}
+
+/**
+  * @brief TIM4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM4_Init(void)
+{
+
+  /* USER CODE BEGIN TIM4_Init 0 */
+
+  /* USER CODE END TIM4_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM4_Init 1 */
+
+  /* USER CODE END TIM4_Init 1 */
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = 7999;
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = 65535;
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM4_Init 2 */
+  HAL_TIM_Base_Start(&htim4);
+  /* USER CODE END TIM4_Init 2 */
+
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOH_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, LD2_Pin|LED01_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(LED02_GPIO_Port, LED02_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : B1_Pin */
+  GPIO_InitStruct.Pin = B1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LD2_Pin LED01_Pin */
+  GPIO_InitStruct.Pin = LD2_Pin|LED01_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : LED02_Pin */
+  GPIO_InitStruct.Pin = LED02_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LED02_GPIO_Port, &GPIO_InitStruct);
+
+}
+
+/* USER CODE BEGIN 4 */
+
+/* USER CODE END 4 */
+
+/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
+  /* USER CODE END Error_Handler_Debug */
+}
+
+#ifdef  USE_FULL_ASSERT
+/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
+void assert_failed(uint8_t *file, uint32_t line)
+{
+  /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* USER CODE END 6 */
+}
+#endif /* USE_FULL_ASSERT */

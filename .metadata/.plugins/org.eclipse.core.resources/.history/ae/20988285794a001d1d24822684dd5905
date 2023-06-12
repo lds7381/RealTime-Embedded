@@ -1,0 +1,17 @@
+/*
+ * customer.c
+ *
+ *  Created on: Oct 12, 2022
+ *      Author: liams
+ */
+
+#include "customer.h"
+
+static uint32_t customer_cnt = 0;
+
+/* Generate Customer with Random values needed for the teller
+ * - Creates a new customer and returns it initalized with random values
+ */
+customer_t generate_customer(){
+
+}

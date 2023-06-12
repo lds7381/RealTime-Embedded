@@ -1,0 +1,5 @@
+../Core/Src/gamemaster.c:17:6:gamemaster_task	136	static
+../Core/Src/gamemaster.c:68:6:reset	24	static
+../Core/Src/gamemaster.c:97:6:seg_write_time	40	static
+../Core/Src/gamemaster.c:114:6:clear_seg7	40	static
+../Core/Src/gamemaster.c:124:6:shiftOut	32	static

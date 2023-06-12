@@ -1,0 +1,168 @@
+/*
+ * DAC.c
+ *
+ *  Created on: Nov 9, 2022
+ *      Author: liams
+ */
+#include "DAC.h"
+#include <string.h>
+
+void start_DAC_signal(DAC_info_t *DAC_info, uint32_t *wave_points) {
+	char buffer[100];
+
+	// Find the ARR of the wave
+	TIM2->ARR = (BASE_CLOCK_SPEED/DAC_info->frequency)/WAVE_POINTS;
+
+	// Need to set the wave_points array
+	switch (DAC_info->signal) {
+	case Rectangle:
+		get_rectangle_wave(DAC_info, wave_points);
+		break;
+	case Sine:
+		get_sine_wave(DAC_info, wave_points);
+		break;
+	case Triangle:
+		get_triangle_wave(DAC_info, wave_points);
+		break;
+	case Arbitrary:
+		get_arbitrary_wave(DAC_info, wave_points);
+		break;
+	}
+
+   // Print out signal information
+   sprintf(buffer, "Starting waveform on Channel %d\r\nType: %d\r\n", DAC_info->channel, DAC_info->signal);
+   print(USART2, buffer);
+   sprintf(buffer, "Frequency: %d\r\n", (int)DAC_info->frequency);
+   print(USART2, buffer);
+   sprintf(buffer, "DAC Output Rate: %d\r\n", (int)TIM2->ARR);
+   print(USART2, buffer);
+   sprintf(buffer, "Samples in Signal: %d\r\n", (int)WAVE_POINTS);
+   print(USART2, buffer);
+   sprintf(buffer, "DAC Codes, Max: %d, Min: %d\r\n", (int)DAC_info->maxv, (int)DAC_info->minv);
+   print(USART2, buffer);
+
+	// Start output to DAC
+	if (DAC_info->channel == 1)  { HAL_DAC_Start_DMA(DAC_info->hdac, DAC_CHANNEL_1, wave_points, WAVE_POINTS, DAC_ALIGN_12B_R); }
+	else if (DAC_info->channel == 2) { HAL_DAC_Start_DMA(DAC_info->hdac, DAC_CHANNEL_2, wave_points, WAVE_POINTS, DAC_ALIGN_12B_R); }
+}
+
+void get_rectangle_wave(DAC_info_t *DAC_info, uint32_t *wave_points) {
+	for (int i = 0; i < WAVE_POINTS; i ++) {
+		if (i < (WAVE_POINTS/2)) {
+			wave_points[i] = DAC_info->maxv | DAC_info->noise_bits;
+		}
+		else {
+			wave_points[i] = DAC_info->minv | DAC_info->noise_bits;
+		}
+	}
+}
+
+void get_sine_wave(DAC_info_t *DAC_info, uint32_t *wave_points) {
+	int i = 0;
+
+	// Get all wave points for sin
+	for (i = 0; i < WAVE_POINTS; i++) {
+		wave_points[i] = (uint32_t)((sin((i * ((2.0*PI)/(double)WAVE_POINTS))) + 1.0) * (((double)DAC_info->maxv)/2.0));
+		wave_points[i] |= DAC_info->noise_bits;
+	}
+
+}
+
+void get_triangle_wave(DAC_info_t *DAC_info, uint32_t *wave_points) {
+	// Get the increment for adding to the voltage
+	uint32_t increment = (DAC_info->maxv - DAC_info->minv) / ((WAVE_POINTS - 1)/2);
+	uint32_t voltage = DAC_info->minv;
+	int i = 0;
+
+	// Set the incline of the triangle
+	wave_points[0] = voltage;
+	for (i = 1; i < (WAVE_POINTS/2); i++) {
+		voltage += increment;
+		wave_points[i] = voltage | DAC_info->noise_bits;
+	}
+	// Set the decline of the triangle
+	wave_points[WAVE_POINTS/2] = voltage;
+	for (i = ((WAVE_POINTS/2) + 1); i < WAVE_POINTS; i++) {
+		voltage -= increment;
+		wave_points[i] = voltage | DAC_info->noise_bits;
+	}
+
+}
+
+void get_arbitrary_wave(DAC_info_t *DAC_info, uint32_t *wave_points) {
+	// Copy EKG contents over
+	memcpy(wave_points, ekg, sizeof(ekg));
+
+	// Scale if need to
+	if (DAC_info->maxv != MAX_DAC_OUTPUT || DAC_info->minv != MIN_DAC_OUTPUT) {
+		scale_wave_points(DAC_info, wave_points);
+	}
+
+	for (int i = 0; i < WAVE_POINTS; i++) {
+		wave_points[i] |= DAC_info->noise_bits;
+	}
+}
+
+
+
+void get_DAC_info(DAC_info_t *DAC_info) {
+	char entered[50];
+	int cnt = 0;
+
+	print(USART2, "Welcome to STM32 Signal Generator\r\n");
+	print(USART2, "> channel type freq minv maxv noise\r\n");
+
+	// Get the user input
+	get_line(entered, sizeof(entered));
+
+	char * token = strtok(entered, " ");
+   // loop through the string to extract all other tokens
+   while( token != NULL ) {
+	   // Set the DAC Information
+	   switch (cnt) {
+		   case 0:	// Channel
+			   DAC_info->channel = atoi(token);
+			   break;
+		   case 1:	// Type
+			   if (token[0] == 'R') { DAC_info->signal = Rectangle;}
+			   else if (token[0] == 'S') {DAC_info->signal = Sine;}
+			   else if (token[0] == 'T') {DAC_info->signal = Triangle;}
+			   else if (token[0] == 'A') {DAC_info->signal = Arbitrary;}
+			   break;
+		   case 2:	// Frequency
+			   DAC_info->frequency = (double)atof(token);	// Need to change from Atoi so that Floating numbers can be inputted
+			   break;
+		   case 3:	// Min Voltage
+			   DAC_info->minv = convert_analogV_digitalV(atof(token));
+			   break;
+		   case 4:	// Max Voltage
+			   DAC_info->maxv = convert_analogV_digitalV(atof(token));
+			   break;
+		   case 5:	// Noise
+			   DAC_info->noise = atoi(token);
+			   DAC_info->noise_bits = (~(0xFFFF << DAC_info->noise));
+			   break;
+		   default:
+			   break;
+	   }
+	  // Get the next token
+	  token = strtok(NULL, " ");
+	  cnt++;
+   }
+}
+
+
+void scale_wave_points(DAC_info_t *DAC_info, uint32_t *wave_points) {
+	double old_range = (MAX_DAC_OUTPUT - MIN_DAC_OUTPUT);
+	double new_range = (DAC_info->maxv - DAC_info->minv);
+
+	for (int i = 0; i < WAVE_POINTS; i++) {
+	 	 wave_points[i] = ((((wave_points[i]) - MIN_DAC_OUTPUT) * new_range) / old_range) + DAC_info->minv;
+	}
+}
+
+uint32_t convert_analogV_digitalV(double voltage){
+	double old_range = (MAX_V_OUTPUT - MIN_V_OUTPUT);
+	double new_range = (MAX_DAC_OUTPUT - MIN_DAC_OUTPUT);
+	return ((((voltage) - MIN_V_OUTPUT) * new_range) / old_range) + MIN_DAC_OUTPUT;
+}

@@ -1,0 +1,36 @@
+/*
+ * queue.c
+ *
+ *	Class will have the task that will create new customers and add them into the queue.
+ *
+ *  Created on: Oct 12, 2022
+ *      Author: liams
+ */
+
+#include "queue.h"
+
+// The queue pointer
+static customer_t *queue;
+
+/* Customer Queue Task
+ * - Customers will be gernated in this task every 1-4 "minutes"
+ * - Waits for semaphore from one of the teller tasks showing that it has finished with a customer
+ */
+void queue_task(void *queue_size) {
+	// Initalize the queue
+	init_queue((uint32_t *)queue_size);
+	// Start the main loop of the task
+	while(1) {
+
+	}
+}
+
+/* Initialize Queue
+ *	- Allocates memory based off the the size given by the parameter of the task
+ */
+void init_queue(uint32_t *size) {
+	// allocate space for the queue depending on the size given in the parameter to the
+	queue = malloc(sizeof(customer_t)*(*size));
+}
+
+

@@ -1,0 +1,4 @@
+../Core/Src/utils.c:17:7:get_servo_process	24	static
+../Core/Src/utils.c:68:10:get_duty_cycle_from_position	16	static
+../Core/Src/utils.c:88:10:get_move_wait	24	static
+../Core/Src/utils.c:102:6:set_led	24	static

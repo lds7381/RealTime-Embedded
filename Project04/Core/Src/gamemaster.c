@@ -1,0 +1,130 @@
+/*
+ * gamemaster.c
+ *
+ *  Created on: Oct 26, 2022
+ *      Author: liams
+ */
+
+#include "gamemaster.h"
+#include "servo.h"
+
+void reset(servo_profile_t *servo01, servo_profile_t *servo02, gamemaster_t *gamemaster);
+
+const uint8_t seven_seg_nums[] = {0xc0, 0xf9, 0xa4, 0xb0, 0x99, 0x92, 0x82, 0xf8, 0x80 ,0x90};
+const uint8_t seven_seg_display[] = {0xf1, 0xf2, 0xf4, 0xf8};
+uint8_t segments[] = {0, 0, 0, 0};
+
+void gamemaster_task(void *argument) {
+	// Get the servo profile from the argument
+	struct gamemaster_t *gamemaster = (gamemaster_t *)argument;
+	servo_profile_t *servo01 = gamemaster->servo01;
+	servo_profile_t *servo02 = gamemaster->servo02;
+	uint8_t time_added = 0;
+	uint8_t new_time = 1;
+	uint8_t restarting = 0;
+	char info[100];
+
+	while (1) {
+		seg_write_time(gamemaster);
+		if (servo01->status == in_position && servo01->rounds < MAX_ROUNDS) {
+			// Get a new start time and reset vars
+			if (new_time) { gamemaster->start_time = TIM5->CNT; new_time = 0; time_added = 0; }
+			// in position
+			if (servo02->status == in_position && (servo01->position == servo02->position)) {
+				// get the end time
+				if (!time_added) {
+					gamemaster->end_time = TIM5->CNT;
+					gamemaster->total_time += (gamemaster->end_time - gamemaster->start_time) / 1000;
+					time_added = 1;
+				}
+			}
+		}
+		// if servo is moving we will need a new time
+		else if (servo01->status == moving) {
+			new_time = 1;
+		}
+		// Game is over
+		else if (servo01->rounds >= MAX_ROUNDS) {
+			// Wait for the game to end when the servo gets to the final location
+			if (servo02->status == in_position && (servo01->position == servo02->position)) {
+				gamemaster->end_time = TIM5->CNT;
+				gamemaster->total_time += (gamemaster->end_time - gamemaster->start_time) / 1000;
+				print(USART2, "GAME IS COMPLETE\r\n");
+				sprintf(info, "Total Score: %d\r\n", (int)gamemaster->total_time);
+				print(USART2, info);
+				restarting = 0;
+				while(!restarting) {
+					seg_write_time(gamemaster);
+					if (check_button02() == pressed) {
+						reset(servo01, servo02, gamemaster);
+						restarting = 1;
+					}
+				}
+			}
+		}
+	}
+}
+
+void reset(servo_profile_t *servo01, servo_profile_t *servo02, gamemaster_t *gamemaster){
+	TIM2->CCR1 = position0;
+	servo01->last_position = 0;
+	servo01->move_wait = 0;
+	servo01->next_wait = 0;
+	servo01->position = 0;
+	servo01->start_time = 0;
+	servo01->status = in_position;
+	servo01->rounds = 0;
+	TIM3->CCR3 = position0;
+	servo02->last_position = 0;
+	servo02->move_wait = 0;
+	servo02->next_wait = 0;
+	servo02->position = 0;
+	servo02->start_time = 0;
+	servo02->status = in_position;
+	servo02->rounds = 0;
+	gamemaster->total_time = 0;
+	print(USART2, "CATCH ME IF YOU CAN!!!\r\n");
+	// FIX COMP WARNINGS
+	position0=position0;
+	position1=position1;
+	position2=position2;
+	position3=position3;
+	position4=position4;
+	position5=position5;
+	osDelay(2000);
+}
+
+void seg_write_time(gamemaster_t *gamemaster) {
+	uint16_t time = gamemaster->total_time;
+	segments[0] = seven_seg_nums[time / 1000];
+	segments[1] = seven_seg_nums[(time / 100) % 10];
+	segments[2] = seven_seg_nums[(time / 10) % 10];
+	segments[3] = seven_seg_nums[time % 10];
+
+	for (int i = 0; i < 4; i ++) {
+		HAL_GPIO_WritePin(gamemaster->D4_SEG7_Latch_Port, gamemaster->D4_SEG7_Latch_Pin, GPIO_PIN_RESET);
+		shiftOut(gamemaster->D8_SEG7_Data_Port, gamemaster->D8_SEG7_Data_Pin, gamemaster->D7_SEG7_Clock_Port, gamemaster->D7_SEG7_Clock_Pin, segments[i]);
+		shiftOut(gamemaster->D8_SEG7_Data_Port, gamemaster->D8_SEG7_Data_Pin, gamemaster->D7_SEG7_Clock_Port, gamemaster->D7_SEG7_Clock_Pin, seven_seg_display[i]);
+		HAL_GPIO_WritePin(gamemaster->D4_SEG7_Latch_Port, gamemaster->D4_SEG7_Latch_Pin, GPIO_PIN_SET);	// latch data
+		osDelay(5);
+	}
+
+}
+
+void clear_seg7(gamemaster_t *gamemaster) {
+	// Clears the 7 Seg Display (ALL ZEROS)
+	for (int i = 0; i < 4; i ++){
+		HAL_GPIO_WritePin(gamemaster->D4_SEG7_Latch_Port, gamemaster->D4_SEG7_Latch_Pin, GPIO_PIN_RESET);
+		shiftOut(gamemaster->D8_SEG7_Data_Port, gamemaster->D8_SEG7_Data_Pin, gamemaster->D7_SEG7_Clock_Port, gamemaster->D7_SEG7_Clock_Pin, seven_seg_nums[0]);
+		shiftOut(gamemaster->D8_SEG7_Data_Port, gamemaster->D8_SEG7_Data_Pin, gamemaster->D7_SEG7_Clock_Port, gamemaster->D7_SEG7_Clock_Pin, 0xff);
+		HAL_GPIO_WritePin(gamemaster->D4_SEG7_Latch_Port, gamemaster->D4_SEG7_Latch_Pin, GPIO_PIN_SET);	// latch data
+	}
+}
+
+void shiftOut(GPIO_TypeDef* data_port, uint16_t data_pin, GPIO_TypeDef* clock_port, uint16_t clock_pin, uint8_t value) {
+	for(int ii=0x80; ii; ii>>=1) {
+		HAL_GPIO_WritePin(clock_port, clock_pin, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(data_port, data_pin, (value&ii)!=0);
+		HAL_GPIO_WritePin(clock_port, clock_pin, GPIO_PIN_SET);
+	}
+}

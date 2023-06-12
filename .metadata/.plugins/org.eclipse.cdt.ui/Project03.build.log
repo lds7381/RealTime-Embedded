@@ -1,0 +1,301 @@
+19:26:04 **** Incremental Build of configuration Debug for project Project03 ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/manager.c" -mcpu=cortex-m4 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32L476xx -c -I../Core/Inc -I../Drivers/STM32L4xx_HAL_Driver/Inc -I../Drivers/STM32L4xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32L4xx/Include -I../Drivers/CMSIS/Include -I../Middlewares/Third_Party/FreeRTOS/Source/include -I../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -MMD -MP -MF"Core/Src/manager.d" -MT"Core/Src/manager.o" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "Core/Src/manager.o"
+In file included from ../Core/Inc/manager.h:14,
+                 from ../Core/Src/manager.c:10:
+../Core/Inc/uart.h:9: warning: "GPIO_SPEED_FREQ_VERY_HIGH" redefined
+    9 | #define GPIO_SPEED_FREQ_VERY_HIGH   (0x00000003u) /*!< range 50 MHz to 80 MHz, please refer to the product datasheet */
+      | 
+In file included from ../Core/Inc/stm32l4xx_hal_conf.h:262,
+                 from ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal.h:29,
+                 from ../Core/Inc/customer.h:13,
+                 from ../Core/Inc/manager.h:13,
+                 from ../Core/Src/manager.c:10:
+../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_gpio.h:139: note: this is the location of the previous definition
+  139 | #define GPIO_SPEED_FREQ_VERY_HIGH       0x00000003u  /*!< Very high speed */
+      | 
+In file included from ../Core/Inc/manager.h:14,
+                 from ../Core/Src/manager.c:10:
+../Core/Inc/uart.h:11: warning: "GPIO_MODE_AF_PP" redefined
+   11 | #define GPIO_MODE_AF_PP             (0x00000002u)   /*!< Alternate Function Push Pull Mode     */
+      | 
+In file included from ../Core/Inc/stm32l4xx_hal_conf.h:262,
+                 from ../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal.h:29,
+                 from ../Core/Inc/customer.h:13,
+                 from ../Core/Inc/manager.h:13,
+                 from ../Core/Src/manager.c:10:
+../Drivers/STM32L4xx_HAL_Driver/Inc/stm32l4xx_hal_gpio.h:118: note: this is the location of the previous definition
+  118 | #define GPIO_MODE_AF_PP                 (MODE_AF | OUTPUT_PP)                                       /*!< Alternate Function Push Pull Mode                                  */
+      | 
+../Core/Src/manager.c: In function 'manager_task':
+../Core/Src/manager.c:37:2: warning: implicit declaration of function 'clear_seg7'; did you mean 'clearerr'? [-Wimplicit-function-declaration]
+   37 |  clear_seg7();
+      |  ^~~~~~~~~~
+      |  clearerr
+../Core/Src/manager.c:45:22: warning: pointer targets in passing argument 2 of 'USART_Write' differ in signedness [-Wpointer-sign]
+   45 |  USART_Write(USART2, "---- BANK OPEN ----\r\n", 22);
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~
+      |                      |
+      |                      char *
+In file included from ../Core/Inc/manager.h:14,
+                 from ../Core/Src/manager.c:10:
+../Core/Inc/uart.h:22:51: note: expected 'uint8_t *' {aka 'unsigned char *'} but argument is of type 'char *'
+   22 | void USART_Write(USART_TypeDef * USARTx, uint8_t *buffer, uint32_t nBytes);
+      |                                          ~~~~~~~~~^~~~~~
+../Core/Src/manager.c:52:3: warning: implicit declaration of function 'update_seg7' [-Wimplicit-function-declaration]
+   52 |   update_seg7(handle);
+      |   ^~~~~~~~~~~
+../Core/Src/manager.c:54:3: warning: implicit declaration of function 'check_breaks' [-Wimplicit-function-declaration]
+   54 |   check_breaks(manager->teller01, manager->teller02, manager->teller03);
+      |   ^~~~~~~~~~~~
+../Core/Src/manager.c:77:22: warning: pointer targets in passing argument 2 of 'USART_Write' differ in signedness [-Wpointer-sign]
+   77 |  USART_Write(USART2, "\r\n---- BANK CLOSED ----\r\n", 26);
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                      |
+      |                      char *
+In file included from ../Core/Inc/manager.h:14,
+                 from ../Core/Src/manager.c:10:
+../Core/Inc/uart.h:22:51: note: expected 'uint8_t *' {aka 'unsigned char *'} but argument is of type 'char *'
+   22 | void USART_Write(USART_TypeDef * USARTx, uint8_t *buffer, uint32_t nBytes);
+      |                                          ~~~~~~~~~^~~~~~
+../Core/Src/manager.c: At top level:
+../Core/Src/manager.c:85:6: warning: conflicting types for 'check_breaks'
+   85 | void check_breaks (teller_t *t1, teller_t *t2, teller_t *t3) {
+      |      ^~~~~~~~~~~~
+../Core/Src/manager.c:54:3: note: previous implicit declaration of 'check_breaks' was here
+   54 |   check_breaks(manager->teller01, manager->teller02, manager->teller03);
+      |   ^~~~~~~~~~~~
+../Core/Src/manager.c:117:6: warning: conflicting types for 'update_seg7'
+  117 | void update_seg7(osMessageQueueId_t *q) {
+      |      ^~~~~~~~~~~
+../Core/Src/manager.c:52:3: note: previous implicit declaration of 'update_seg7' was here
+   52 |   update_seg7(handle);
+      |   ^~~~~~~~~~~
+../Core/Src/manager.c: In function 'update_seg7':
+../Core/Src/manager.c:124:2: warning: implicit declaration of function 'shiftOut' [-Wimplicit-function-declaration]
+  124 |  shiftOut(SHLD_D8_SEG7_Data_GPIO_Port, SHLD_D8_SEG7_Data_Pin, SHLD_D7_SEG7_Clock_GPIO_Port, SHLD_D7_SEG7_Clock_Pin, seg_display);
+      |  ^~~~~~~~
+../Core/Src/manager.c: At top level:
+../Core/Src/manager.c:149:6: warning: conflicting types for 'clear_seg7'
+  149 | void clear_seg7() {
+      |      ^~~~~~~~~~
+../Core/Src/manager.c:37:2: note: previous implicit declaration of 'clear_seg7' was here
+   37 |  clear_seg7();
+      |  ^~~~~~~~~~
+../Core/Src/manager.c:157:6: warning: conflicting types for 'shiftOut'
+  157 | void shiftOut(GPIO_TypeDef* data_port, uint16_t data_pin, GPIO_TypeDef* clock_port, uint16_t clock_pin, uint8_t value) {
+      |      ^~~~~~~~
+../Core/Src/manager.c:124:2: note: previous implicit declaration of 'shiftOut' was here
+  124 |  shiftOut(SHLD_D8_SEG7_Data_GPIO_Port, SHLD_D8_SEG7_Data_Pin, SHLD_D7_SEG7_Clock_GPIO_Port, SHLD_D7_SEG7_Clock_Pin, seg_display);
+      |  ^~~~~~~~
+../Core/Src/manager.c: In function 'print_results':
+../Core/Src/manager.c:182:15: warning: pointer targets in passing argument 2 of 'sprintf' differ in signedness [-Wpointer-sign]
+  182 |  sprintf(str, (uint8_t *)"\t Teller 1: %d\r\n\t Teller 2: %d\r\n\t Teller 3: %d\r\n", t1->customers_helped, t2->customers_helped, t3->customers_helped);
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |               |
+      |               uint8_t * {aka unsigned char *}
+In file included from ../Core/Inc/manager.h:11,
+                 from ../Core/Src/manager.c:10:
+c:\st\stm32cubeide_1.10.1\stm32cubeide\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.10.3-2021.10.win32_1.0.0.202111181127\tools\arm-none-eabi\include\stdio.h:244:32: note: expected 'const char * restrict' but argument is of type 'uint8_t *' {aka 'unsigned char *'}
+  244 | int sprintf (char *__restrict, const char *__restrict, ...)
+      |                                ^
+../Core/Src/manager.c:182:41: warning: format '%d' expects argument of type 'int', but argument 3 has type 'uint32_t' {aka 'long unsigned int'} [-Wformat=]
+  182 |  sprintf(str, (uint8_t *)"\t Teller 1: %d\r\n\t Teller 2: %d\r\n\t Teller 3: %d\r\n", t1->customers_helped, t2->customers_helped, t3->customers_helped);
+      |                                        ~^                                             ~~~~~~~~~~~~~~~~~~~~
+      |                                         |                                               |
+      |                                         int                                             uint32_t {aka long unsigned int}
+      |                                        %ld
+../Core/Src/manager.c:182:60: warning: format '%d' expects argument of type 'int', but argument 4 has type 'uint32_t' {aka 'long unsigned int'} [-Wformat=]
+  182 |  sprintf(str, (uint8_t *)"\t Teller 1: %d\r\n\t Teller 2: %d\r\n\t Teller 3: %d\r\n", t1->customers_helped, t2->customers_helped, t3->customers_helped);
+      |                                                           ~^                                                ~~~~~~~~~~~~~~~~~~~~
+      |                                                            |                                                  |
+      |                                                            int                                                uint32_t {aka long unsigned int}
+      |                                                           %ld
+../Core/Src/manager.c:182:79: warning: format '%d' expects argument of type 'int', but argument 5 has type 'uint32_t' {aka 'long unsigned int'} [-Wformat=]
+  182 |  sprintf(str, (uint8_t *)"\t Teller 1: %d\r\n\t Teller 2: %d\r\n\t Teller 3: %d\r\n", t1->customers_helped, t2->customers_helped, t3->customers_helped);
+      |                                                                              ~^                                                   ~~~~~~~~~~~~~~~~~~~~
+      |                                                                               |                                                     |
+      |                                                                               int                                                   uint32_t {aka long unsigned int}
+      |                                                                              %ld
+../Core/Src/manager.c:187:78: warning: implicit declaration of function 'convert_ticks_seconds' [-Wimplicit-function-declaration]
+  187 |  str_size = sprintf(str, (uint8_t *)"Average time spent in queue: %d s\r\n", convert_ticks_seconds(avg_time_in_queue));
+      |                                                                              ^~~~~~~~~~~~~~~~~~~~~
+../Core/Src/manager.c:187:26: warning: pointer targets in passing argument 2 of 'sprintf' differ in signedness [-Wpointer-sign]
+  187 |  str_size = sprintf(str, (uint8_t *)"Average time spent in queue: %d s\r\n", convert_ticks_seconds(avg_time_in_queue));
+      |                          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                          |
+      |                          uint8_t * {aka unsigned char *}
+In file included from ../Core/Inc/manager.h:11,
+                 from ../Core/Src/manager.c:10:
+c:\st\stm32cubeide_1.10.1\stm32cubeide\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.10.3-2021.10.win32_1.0.0.202111181127\tools\arm-none-eabi\include\stdio.h:244:32: note: expected 'const char * restrict' but argument is of type 'uint8_t *' {aka 'unsigned char *'}
+  244 | int sprintf (char *__restrict, const char *__restrict, ...)
+      |                                ^
+../Core/Src/manager.c:198:15: warning: pointer targets in passing argument 2 of 'sprintf' differ in signedness [-Wpointer-sign]
+  198 |  sprintf(str, (uint8_t *)"Average Teller wait for Customer: %d s\r\n", convert_ticks_seconds(avg_teller_wait));
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |               |
+      |               uint8_t * {aka unsigned char *}
+In file included from ../Core/Inc/manager.h:11,
+                 from ../Core/Src/manager.c:10:
+c:\st\stm32cubeide_1.10.1\stm32cubeide\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.10.3-2021.10.win32_1.0.0.202111181127\tools\arm-none-eabi\include\stdio.h:244:32: note: expected 'const char * restrict' but argument is of type 'uint8_t *' {aka 'unsigned char *'}
+  244 | int sprintf (char *__restrict, const char *__restrict, ...)
+      |                                ^
+../Core/Src/manager.c:213:22: warning: pointer targets in passing argument 2 of 'USART_Write' differ in signedness [-Wpointer-sign]
+  213 |  USART_Write(USART2, str, 27);
+      |                      ^~~
+      |                      |
+      |                      char *
+In file included from ../Core/Inc/manager.h:14,
+                 from ../Core/Src/manager.c:10:
+../Core/Inc/uart.h:22:51: note: expected 'uint8_t *' {aka 'unsigned char *'} but argument is of type 'char *'
+   22 | void USART_Write(USART_TypeDef * USARTx, uint8_t *buffer, uint32_t nBytes);
+      |                                          ~~~~~~~~~^~~~~~
+../Core/Src/manager.c:227:22: warning: pointer targets in passing argument 2 of 'USART_Write' differ in signedness [-Wpointer-sign]
+  227 |  USART_Write(USART2, str, 35);
+      |                      ^~~
+      |                      |
+      |                      char *
+In file included from ../Core/Inc/manager.h:14,
+                 from ../Core/Src/manager.c:10:
+../Core/Inc/uart.h:22:51: note: expected 'uint8_t *' {aka 'unsigned char *'} but argument is of type 'char *'
+   22 | void USART_Write(USART_TypeDef * USARTx, uint8_t *buffer, uint32_t nBytes);
+      |                                          ~~~~~~~~~^~~~~~
+../Core/Src/manager.c:241:22: warning: pointer targets in passing argument 2 of 'USART_Write' differ in signedness [-Wpointer-sign]
+  241 |  USART_Write(USART2, str, 30);
+      |                      ^~~
+      |                      |
+      |                      char *
+In file included from ../Core/Inc/manager.h:14,
+                 from ../Core/Src/manager.c:10:
+../Core/Inc/uart.h:22:51: note: expected 'uint8_t *' {aka 'unsigned char *'} but argument is of type 'char *'
+   22 | void USART_Write(USART_TypeDef * USARTx, uint8_t *buffer, uint32_t nBytes);
+      |                                          ~~~~~~~~~^~~~~~
+../Core/Src/manager.c:245:22: warning: pointer targets in passing argument 2 of 'USART_Write' differ in signedness [-Wpointer-sign]
+  245 |  USART_Write(USART2, str, 22);
+      |                      ^~~
+      |                      |
+      |                      char *
+In file included from ../Core/Inc/manager.h:14,
+                 from ../Core/Src/manager.c:10:
+../Core/Inc/uart.h:22:51: note: expected 'uint8_t *' {aka 'unsigned char *'} but argument is of type 'char *'
+   22 | void USART_Write(USART_TypeDef * USARTx, uint8_t *buffer, uint32_t nBytes);
+      |                                          ~~~~~~~~~^~~~~~
+../Core/Src/manager.c:249:22: warning: pointer targets in passing argument 2 of 'USART_Write' differ in signedness [-Wpointer-sign]
+  249 |  USART_Write(USART2, str, str_size);
+      |                      ^~~
+      |                      |
+      |                      char *
+In file included from ../Core/Inc/manager.h:14,
+                 from ../Core/Src/manager.c:10:
+../Core/Inc/uart.h:22:51: note: expected 'uint8_t *' {aka 'unsigned char *'} but argument is of type 'char *'
+   22 | void USART_Write(USART_TypeDef * USARTx, uint8_t *buffer, uint32_t nBytes);
+      |                                          ~~~~~~~~~^~~~~~
+../Core/Src/manager.c:252:26: warning: pointer targets in passing argument 2 of 'sprintf' differ in signedness [-Wpointer-sign]
+  252 |  str_size = sprintf(str, (uint8_t *)"Total Number of breaks: %d\r\n", (t1->breaks_cnt + t2->breaks_cnt + t3->breaks_cnt));
+      |                          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                          |
+      |                          uint8_t * {aka unsigned char *}
+In file included from ../Core/Inc/manager.h:11,
+                 from ../Core/Src/manager.c:10:
+c:\st\stm32cubeide_1.10.1\stm32cubeide\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.10.3-2021.10.win32_1.0.0.202111181127\tools\arm-none-eabi\include\stdio.h:244:32: note: expected 'const char * restrict' but argument is of type 'uint8_t *' {aka 'unsigned char *'}
+  244 | int sprintf (char *__restrict, const char *__restrict, ...)
+      |                                ^
+../Core/Src/manager.c:252:63: warning: format '%d' expects argument of type 'int', but argument 3 has type 'uint32_t' {aka 'long unsigned int'} [-Wformat=]
+  252 |  str_size = sprintf(str, (uint8_t *)"Total Number of breaks: %d\r\n", (t1->breaks_cnt + t2->breaks_cnt + t3->breaks_cnt));
+      |                                                              ~^       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                                               |                                        |
+      |                                                               int                                      uint32_t {aka long unsigned int}
+      |                                                              %ld
+../Core/Src/manager.c:256:26: warning: pointer targets in passing argument 2 of 'sprintf' differ in signedness [-Wpointer-sign]
+  256 |  str_size = sprintf(str, (uint8_t *)"\t Teller 1: %d\r\n\t Teller 2: %d\r\n\t Teller 3: %d\r\n", t1->breaks_cnt, t2->breaks_cnt, t3->breaks_cnt);
+      |                          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                          |
+      |                          uint8_t * {aka unsigned char *}
+In file included from ../Core/Inc/manager.h:11,
+                 from ../Core/Src/manager.c:10:
+c:\st\stm32cubeide_1.10.1\stm32cubeide\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.10.3-2021.10.win32_1.0.0.202111181127\tools\arm-none-eabi\include\stdio.h:244:32: note: expected 'const char * restrict' but argument is of type 'uint8_t *' {aka 'unsigned char *'}
+  244 | int sprintf (char *__restrict, const char *__restrict, ...)
+      |                                ^
+../Core/Src/manager.c:256:52: warning: format '%d' expects argument of type 'int', but argument 3 has type 'uint32_t' {aka 'long unsigned int'} [-Wformat=]
+  256 |  str_size = sprintf(str, (uint8_t *)"\t Teller 1: %d\r\n\t Teller 2: %d\r\n\t Teller 3: %d\r\n", t1->breaks_cnt, t2->breaks_cnt, t3->breaks_cnt);
+      |                                                   ~^                                             ~~~~~~~~~~~~~~
+      |                                                    |                                               |
+      |                                                    int                                             uint32_t {aka long unsigned int}
+      |                                                   %ld
+../Core/Src/manager.c:256:71: warning: format '%d' expects argument of type 'int', but argument 4 has type 'uint32_t' {aka 'long unsigned int'} [-Wformat=]
+  256 |  str_size = sprintf(str, (uint8_t *)"\t Teller 1: %d\r\n\t Teller 2: %d\r\n\t Teller 3: %d\r\n", t1->breaks_cnt, t2->breaks_cnt, t3->breaks_cnt);
+      |                                                                      ~^                                          ~~~~~~~~~~~~~~
+      |                                                                       |                                            |
+      |                                                                       int                                          uint32_t {aka long unsigned int}
+      |                                                                      %ld
+../Core/Src/manager.c:256:90: warning: format '%d' expects argument of type 'int', but argument 5 has type 'uint32_t' {aka 'long unsigned int'} [-Wformat=]
+  256 |  str_size = sprintf(str, (uint8_t *)"\t Teller 1: %d\r\n\t Teller 2: %d\r\n\t Teller 3: %d\r\n", t1->breaks_cnt, t2->breaks_cnt, t3->breaks_cnt);
+      |                                                                                         ~^                                       ~~~~~~~~~~~~~~
+      |                                                                                          |                                         |
+      |                                                                                          int                                       uint32_t {aka long unsigned int}
+      |                                                                                         %ld
+../Core/Src/manager.c:269:26: warning: pointer targets in passing argument 2 of 'sprintf' differ in signedness [-Wpointer-sign]
+  269 |  str_size = sprintf(str, (uint8_t *)"Longest Break Time: %d s\r\n", convert_ticks_seconds(max_break_time));
+      |                          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                          |
+      |                          uint8_t * {aka unsigned char *}
+In file included from ../Core/Inc/manager.h:11,
+                 from ../Core/Src/manager.c:10:
+c:\st\stm32cubeide_1.10.1\stm32cubeide\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.10.3-2021.10.win32_1.0.0.202111181127\tools\arm-none-eabi\include\stdio.h:244:32: note: expected 'const char * restrict' but argument is of type 'uint8_t *' {aka 'unsigned char *'}
+  244 | int sprintf (char *__restrict, const char *__restrict, ...)
+      |                                ^
+../Core/Src/manager.c:282:26: warning: pointer targets in passing argument 2 of 'sprintf' differ in signedness [-Wpointer-sign]
+  282 |  str_size = sprintf(str, (uint8_t *)"Shortest Break Time: %d s\r\n", convert_ticks_seconds(min_break_time));
+      |                          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                          |
+      |                          uint8_t * {aka unsigned char *}
+In file included from ../Core/Inc/manager.h:11,
+                 from ../Core/Src/manager.c:10:
+c:\st\stm32cubeide_1.10.1\stm32cubeide\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.10.3-2021.10.win32_1.0.0.202111181127\tools\arm-none-eabi\include\stdio.h:244:32: note: expected 'const char * restrict' but argument is of type 'uint8_t *' {aka 'unsigned char *'}
+  244 | int sprintf (char *__restrict, const char *__restrict, ...)
+      |                                ^
+../Core/Src/manager.c:287:26: warning: pointer targets in passing argument 2 of 'sprintf' differ in signedness [-Wpointer-sign]
+  287 |  str_size = sprintf(str, (uint8_t *)"Average Break Time: %d s\r\n", convert_ticks_seconds(avg_break_time));
+      |                          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                          |
+      |                          uint8_t * {aka unsigned char *}
+In file included from ../Core/Inc/manager.h:11,
+                 from ../Core/Src/manager.c:10:
+c:\st\stm32cubeide_1.10.1\stm32cubeide\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.10.3-2021.10.win32_1.0.0.202111181127\tools\arm-none-eabi\include\stdio.h:244:32: note: expected 'const char * restrict' but argument is of type 'uint8_t *' {aka 'unsigned char *'}
+  244 | int sprintf (char *__restrict, const char *__restrict, ...)
+      |                                ^
+../Core/Src/manager.c: In function 'monitor':
+../Core/Src/manager.c:306:42: warning: format '%d' expects argument of type 'int', but argument 6 has type 'uint32_t' {aka 'long unsigned int'} [-Wformat=]
+  306 |  sprintf(str, "\rTime: %d:%d:%d, Queue: %d, Teller 1: %d, Teller 2: %d, Teller 3: %d            ", hours, mins, secs, queue_size, t1->status, t2->status, t3->status);
+      |                                         ~^                                                                            ~~~~~~~~~~
+      |                                          |                                                                            |
+      |                                          int                                                                          uint32_t {aka long unsigned int}
+      |                                         %ld
+../Core/Src/manager.c:307:22: warning: pointer targets in passing argument 2 of 'USART_Write' differ in signedness [-Wpointer-sign]
+  307 |  USART_Write(USART2, str, 70);
+      |                      ^~~
+      |                      |
+      |                      char *
+In file included from ../Core/Inc/manager.h:14,
+                 from ../Core/Src/manager.c:10:
+../Core/Inc/uart.h:22:51: note: expected 'uint8_t *' {aka 'unsigned char *'} but argument is of type 'char *'
+   22 | void USART_Write(USART_TypeDef * USARTx, uint8_t *buffer, uint32_t nBytes);
+      |                                          ~~~~~~~~~^~~~~~
+At top level:
+../Core/Src/manager.c:15:24: warning: 'force_stat' defined but not used [-Wunused-variable]
+   15 | static teller_status_t force_stat;
+      |                        ^~~~~~~~~~
+arm-none-eabi-gcc -o "Project03.elf" @"objects.list"   -mcpu=cortex-m4 -T"C:\Users\liams\Documents\Real Time and Embedded Systems\Project03\STM32L476RGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Project03.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: Project03.elf
+ 
+arm-none-eabi-size   Project03.elf 
+arm-none-eabi-objdump -h -S  Project03.elf  > "Project03.list"
+   text	   data	    bss	    dec	    hex	filename
+  39028	    124	  15996	  55148	   d76c	Project03.elf
+Finished building: default.size.stdout
+ 
+Finished building: Project03.list
+ 
+
+19:26:05 Build Finished. 0 errors, 36 warnings. (took 1s.114ms)
+
